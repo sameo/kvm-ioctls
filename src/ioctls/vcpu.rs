@@ -92,6 +92,21 @@ pub enum VcpuExit<'a> {
     IoapicEoi(u8 /* vector */),
     /// Corresponds to KVM_EXIT_HYPERV.
     Hyperv,
+    /// Corresponds to KVM_EXIT_X86_RDMSR.
+    X86RdMsr(
+        &'a u8,      /* error*/
+        u32,         /* reason */
+        u32,         /* index */
+        &'a mut u64, /* data */
+    ),
+
+    /// Corresponds to KVM_EXIT_X86_WRMSR.
+    X86WrMsr(
+        &'a u8, /* error*/
+        u32,    /* reason */
+        u32,    /* index */
+        u64,    /* data */
+    ),
 }
 
 /// Wrapper over KVM vCPU ioctls.
@@ -1327,6 +1342,26 @@ impl VcpuFd {
                     Ok(VcpuExit::IoapicEoi(eoi.vector))
                 }
                 KVM_EXIT_HYPERV => Ok(VcpuExit::Hyperv),
+                KVM_EXIT_X86_RDMSR => {
+                    // Safe because the exit_reason (which comes from the kernel) told us which
+                    // union field to use.
+                    let msr = unsafe { &mut run.__bindgen_anon_1.msr };
+                    let error = &mut msr.error;
+                    let reason = msr.reason;
+                    let index = msr.index;
+                    let data = &mut msr.data;
+                    Ok(VcpuExit::X86RdMsr(error, reason, index, data))
+                }
+                KVM_EXIT_X86_WRMSR => {
+                    // Safe because the exit_reason (which comes from the kernel) told us which
+                    // union field to use.
+                    let msr = unsafe { &mut run.__bindgen_anon_1.msr };
+                    let error = &mut msr.error;
+                    let reason = msr.reason;
+                    let index = msr.index;
+                    let data = msr.data;
+                    Ok(VcpuExit::X86WrMsr(error, reason, index, data))
+                }
                 r => panic!("unknown kvm exit reason: {}", r),
             }
         } else {
